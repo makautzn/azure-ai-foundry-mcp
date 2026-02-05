@@ -1,12 +1,13 @@
 # Azure AI Foundry Agent MCP
 
-This project provides an MCP (Model Context Protocol) server for integrating with Azure AI Agent Service. It is designed to help you interact with Azure-hosted AI agents, query them, and manage agent-related workflows in a secure and scalable way.
+This project provides an MCP (Model Context Protocol) server for integrating with Azure AI Foundry Project agents. It is designed to help you interact with Azure-hosted AI agents (created in the Foundry portal), query them, and manage agent-related workflows in a secure and scalable way.
 
 ## Features
-- Automatic discovery and registration of all Azure AI Agents from your service
-- Dynamically creates MCP tools for each agent in your Azure AI Agent Service
+- Automatic discovery and registration of all Azure AI Project agents from your Foundry project
+- Dynamically creates MCP tools for each agent in your Azure AI Foundry Project
 - Supports both local and web transport modes
 - Regular background sync to detect new or changed agents
+- Uses Azure AI Projects SDK v2 (`azure-ai-projects==2.0.0b3`) with separate `azure-ai-agents` package
 
 ## Project Structure
 - `azure_agent_mcp_server/` — Main server code and tools
@@ -15,8 +16,10 @@ This project provides an MCP (Model Context Protocol) server for integrating wit
 - `uv.lock` — Lockfile for reproducible installs (managed by [uv](https://github.com/astral-sh/uv))
 
 ## Notes
-- The most recent version of the AI Foundry SDK requires an AI Foundry Project. It doesn't support a hub based project currently.
-For more information about Azure AI Foundry project types, see the [official documentation](https://learn.microsoft.com/en-us/azure/ai-foundry/what-is-azure-ai-foundry#project-types).
+- **SDK Version**: This project uses `azure-ai-projects==2.0.0b3` and `azure-ai-agents>=1.1.0`
+- **Agent Types**: Works with **Project agents** (prompt-based agents created in the Azure AI Foundry portal), not classic agents created programmatically
+- **Project Requirement**: Requires an Azure AI Foundry Project. Hub-based projects are not supported.
+- For more information about Azure AI Foundry project types, see the [official documentation](https://learn.microsoft.com/en-us/azure/ai-foundry/what-is-azure-ai-foundry#project-types).
 
 ## Getting Started
 
@@ -70,9 +73,9 @@ The server can run in two modes:
   ```
 
 When started, the server will:
-1. Connect to Azure AI Agent Service using the provided endpoint
-2. Automatically discover all your agents
-3. Create MCP tools for each agent
+1. Connect to Azure AI Foundry Project using the provided endpoint
+2. Automatically discover all your project agents (created in Foundry portal)
+3. Create MCP tools for each agent using the OpenAI responses API
 4. Periodically check for new or updated agents every 300 seconds
 
 ### 4. Querying Agents in VSCode / GitHub Copilot
@@ -97,7 +100,7 @@ When started, the server will:
     },
    ```
 
-2. After the server starts, it automatically discovers all agents from your Azure AI Agent Service and makes them available as MCP tools with names based on the agent names (converted to snake_case).
+2. After the server starts, it automatically discovers all agents from your Azure AI Foundry Project and makes them available as MCP tools with names based on the agent names (converted to snake_case).
 
 3. You can then use these tools directly in GitHub Copilot or any other MCP-compatible client.
 
@@ -134,16 +137,41 @@ LOG_LEVEL=INFO
 
 The system automatically:
 
-1. Connects to Azure AI Agent Service on startup
-2. Discovers all agents available in your service
+1. Connects to Azure AI Foundry Project on startup using `AIProjectClient`
+2. Discovers all project agents available in your Foundry project via `project_client.agents.list()`
 3. Creates an MCP tool for each agent, converting the agent name to snake_case for the function name
-4. Sets the tool description to match the agent description 
-5. Periodically checks for new, updated, or deleted agents
-6. Updates the available tools accordingly
+4. Extracts the agent's instructions/description from the latest version definition
+5. Uses the OpenAI responses API with agent references to query agents
+6. Periodically checks for new, updated, or deleted agents
+7. Updates the available tools accordingly
 
 Example:
 - An agent named "Coding Guidelines" becomes a tool named `coding_guidelines`
 - An agent named "Python Expert" becomes a tool named `python_expert`
+
+## Technical Details
+
+### SDK v2 Changes
+This project has been migrated to Azure AI Projects SDK v2 (`azure-ai-projects==2.0.0b3`), which introduces significant changes:
+
+#### Architecture
+- **Client**: Uses `AIProjectClient` from `azure.ai.projects` instead of `AgentsClient` from `azure.ai.agents`
+- **Agent Discovery**: Uses `project_client.agents.list()` to discover project agents
+- **Agent Invocation**: Uses OpenAI responses API (`openai_client.responses.create()`) with agent references instead of the classic threads/messages/runs workflow
+- **Agent Identification**: Agents are identified by **name** rather than ID
+
+#### Agent Types
+The SDK v2 distinguishes between two types of agents:
+1. **Classic agents** - Created programmatically via `AgentsClient`, use threads/messages/runs API
+2. **Project agents** (used by this server) - Created in Azure AI Foundry portal, use responses API with agent references
+
+This MCP server specifically supports **Project agents** (prompt-based agents) created in the Foundry portal.
+
+### Dependencies
+- `azure-ai-projects==2.0.0b3` - Main Azure AI Foundry SDK
+- `azure-ai-agents>=1.1.0` - Agent models and types (now a separate package in v2)
+- `openai>=2.16.0` - Required for responses API
+- `fastmcp>=2.3.5` - MCP server framework
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
